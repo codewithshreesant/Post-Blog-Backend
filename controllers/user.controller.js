@@ -3,183 +3,117 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
-const generateToken = async( userId ) => {
-    try {
-        const user =  await User.findById({ _id: userId });
-        const token = user.JwtToken();
-        user.verifyToken = token;
-        await user.save({validateBeforeSave:false});
-        return { token: token }
-    } catch (error) {
-        console.log("Error while generating token ", error.messsage);
-        throw new ApiError(402, error.message);
-    }
-}
+const generateToken = async (userId) => {
+  try {
+    const user = await User.findById({ _id: userId });
+    const token = user.JwtToken();
+    user.verifyToken = token;
+    await user.save({ validateBeforeSave: false });
+    return { token: token };
+  } catch (error) {
+    console.error("Error while generating token: ", error); // Use console.error for better logging
+    throw new ApiError(402, error.message);
+  }
+};
 
-const passwordCompare = async (userId, password)=>{
-    const user = await User.findById({_id:userId});
+const passwordCompare = async (userId, password) => {
+  try {
+    const user = await User.findById({ _id: userId });
     const isPasswordCorrect = await user.comparePassword(password);
-    console.log("is password correct ", isPasswordCorrect)
-
+    console.log("is password correct ", isPasswordCorrect);
     return isPasswordCorrect;
-}
+  } catch (error) {
+    console.error("Error comparing password: ", error);
+    throw new ApiError(500, "Internal Server Error during password comparison"); // More generic error
+  }
+};
 
-const registerUser = asyncHandler(
-    async ( req, res, next )=>{
-        const { username, email, password } = req.body;
-        if (
-            [ username, email, password ].some((field)=>{
-                return field==""
-            })
-        ){
-            throw new ApiError(
-                402,
-                " All fields are required ! "
-            )
-        }
+const registerUser = asyncHandler(async (req, res, next) => {
+  const { username, email, password } = req.body;
+  if ([username, email, password].some((field) => !field)) { // Check for empty fields correctly
+    throw new ApiError(402, "All fields are required!");
+  }
 
-        const isUserExist = await User.find({
-            email
-        })
+  const isUserExist = await User.findOne({ email }); // Use findOne for a single result
 
-        if(
-            isUserExist.length > 0
-        ){
-            throw new ApiError(
-                402,
-                " User already Exist "
-            )
-        }
-        
-        const newUser = await User.create({
-            username,
-            email,
-            password
-        })
-        
-        const user = await newUser.save();
+  if (isUserExist) {
+    throw new ApiError(402, "User already exists");
+  }
 
-        res.status(
-            200
-        ).json(
-            new ApiResponse(
-                200,
-                " User Created Successfully ",
-                user 
-            )
-        )
+  const newUser = await User.create({
+    username,
+    email,
+    password,
+  });
+
+  const user = await newUser.save();
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, "User Created Successfully", user));
+});
+
+const loginUser = asyncHandler(async (req, res, next) => {
+  const { email, password } = req.body;
+  if (!email || !password) { // simplified empty check
+    return res
+        .status(401)
+        .json(new ApiResponse(401, "Email and password is required"));
+  }
+
+  const user = await User.findOne({ email }); // Use findOne
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  try {
+    const isPasswordCorrect = await passwordCompare(user._id, password);
+
+    if (!isPasswordCorrect) {
+      return res
+        .status(401)
+        .json(new ApiResponse(401, "Incorrect Password"));
     }
-)
 
-const loginUser = asyncHandler(
-    async ( req, res, next ) => {
-        const { email, password } = req.body;
-        if(
-            [ email, password ].some((field)=>{
-                return field == ""
-            })
-        ){
-            throw new ApiError(
-                402,
-                "email and password is required ! "
-            )
-        }
+    const { token } = await generateToken(user._id);
 
-        const isUserExist = await User.find({
-            email
-        })
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", //only secure cookies in production
+      expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000), // 1 day Expiry
+    };
 
-        if(!isUserExist)
-        {
-            throw new ApiError(
-                404,
-                " User not found ",
-            )
-        }
+    res.cookie("token", token, cookieOptions);
 
-        console.log("userId ", isUserExist[0]._id);
-        const isPasswordCorrect = await passwordCompare(isUserExist[0]._id,password);
-        if(!isPasswordCorrect)
-        {
-            throw new ApiError(
-                401,
-                "Incorrect Password"
-            )
-        }
+    res
+      .status(200)
+      .json(new ApiResponse(200, "User LoggedIn Successfully", user));
+  } catch (error) {
+        console.error("Login Error: ", error);
+        return res.status(500).json(new ApiResponse(500, "Login Failed"));
+  }
 
-        const { token } = await generateToken(isUserExist[0]._id);
+});
 
-        console.log("login token ", token);
+const logoutUser = asyncHandler(async (req, res, next) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  });
 
-        const cookieOptions = {
-            httpOnly:true,
-            secure:true,
-            expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000) // 1 day Expiry 
-        }
-        
-        res.cookie('token', token, cookieOptions);
+  res
+    .status(200)
+    .json(new ApiResponse(200, "User LoggedOut Successfully"));
+});
 
-        res.status(
-            200
-        ).json(
-            new ApiResponse(
-                200,
-                " User LoggedIn Successfully ",
-                isUserExist[0]
-            )
-        )
+const getAllUsers = asyncHandler(async (req, res, next) => {
+  const users = await User.find({});
+  if (!users || users.length === 0) { // check for empty array too
+    throw new ApiError(404, "No users found");
+  }
 
-    }
-)
+  res.status(200).json(new ApiResponse(200, "All Users", users));
+});
 
-const logoutUser = asyncHandler(
-    async(req,res,next)=>{
-        res.clearCookie('token',{
-            httpOnly:true,
-            secure:true 
-        });
-
-        res.status(
-            200
-        ).json(
-            new ApiResponse(
-                200,
-                " User LoggedOut Successfully "
-            )
-        )
-    }
-)
-
-const getAllUsers = asyncHandler(
-    async(req,res,next) => {
-        const users = await User.find({});
-        if(
-            !users
-        ){
-            throw new ApiError(
-                404,
-                " no users found "
-            )
-        }
-
-        res.status(
-            200
-        ).json(
-            new ApiResponse(
-                200,
-                " All Users ",
-                users
-            )
-        )
-    }
-)
-
-export {
-    registerUser,
-    loginUser,
-    logoutUser,
-    getAllUsers
-}
-
-
- 
+export { registerUser, loginUser, logoutUser, getAllUsers };

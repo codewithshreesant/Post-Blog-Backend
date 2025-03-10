@@ -121,9 +121,17 @@ const AdminLogin = asyncHandler(
                 return field===''
             })
         ){
-            throw new ApiError(
-                402,
-                "username and password is required "
+            // throw new ApiError(
+            //     402,
+            //     "username and password is required "
+            // )
+            return res.status(
+                402
+            ).json(
+                new ApiError(
+                    402,
+                    "username and password is required"
+                )
             )
         }
 
@@ -142,9 +150,17 @@ const AdminLogin = asyncHandler(
         if(
             !isPasswordCorrect 
         ){
-            throw new ApiError(
-                404,
-                " Incorrect Password " 
+            // throw new ApiError(
+            //     404,
+            //     " Incorrect Password " 
+            // )
+            return res.status(
+                404
+            ).json(
+                new ApiError(
+                    404,
+                    "Incorrect password"
+                )
             )
         }
 
@@ -154,6 +170,7 @@ const AdminLogin = asyncHandler(
             new ApiResponse(
                 200,
                 " Admin Login Successfull ",
+                isAdminExist
             )
         )
 
