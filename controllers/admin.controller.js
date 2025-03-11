@@ -80,38 +80,33 @@ const getAdmin = asyncHandler(
     }
 )
 
-const updateAdmin = asyncHandler(
-    async (req,res,next) => {
-        const { id } = req.params;
-        const updatedAdmin = await Admin.findByIdAndUpdate(
-            {_id:id},
-            {
-                ...req.body
-            },
-            {
-                new: true
-            }
-        )
+const updateAdmin = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { password, ...updateData } = req.body; // Extract password and other data
 
-        if(
-            !updatedAdmin
-        ){
-            throw new ApiError(
-                404,
-                " NO Updated Admin Found"
-            )
+    try {
+        const admin = await Admin.findById(id);
+
+        if (!admin) {
+            throw new ApiError(404, "Admin not found");
         }
 
-        res.status(
-            200
-        ).json(
-            new ApiResponse(
-                200,
-                " Admin Updated Successfully "
-            )
-        )
+        // Update all fields except password directly
+        Object.assign(admin, updateData);
+
+        // Update password only if provided
+        if (password) {
+            admin.password = password; // Set the new password, triggering pre('save')
+        }
+
+        const updatedAdmin = await admin.save(); // Save the document, triggering pre('save')
+
+        res.status(200).json(new ApiResponse(200, "Admin updated successfully", updatedAdmin));
+
+    } catch (error) {
+        return next(error);
     }
-)
+});
 
 const AdminLogin = asyncHandler(
     async(req,res,next) => {
@@ -137,14 +132,14 @@ const AdminLogin = asyncHandler(
 
         const isAdminExist = await Admin.find({username});
 
-        if(!isAdminExist)
+        if(isAdminExist.length === 0)
         {
             throw new ApiError(
                 404,
                 "No Admin Found"
             )
         }
-
+        console.log("is admin exist ", isAdminExist)
         const isPasswordCorrect = await passwordCompare(isAdminExist[0]._id, password);
 
         if(
