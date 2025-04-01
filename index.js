@@ -20,7 +20,7 @@ app.use(express.json())
 
 app.use(cors(
     {
-        origin:'https://post-blog-frontend.vercel.app',
+        origin:'https://shrisant-academy.vercel.app/',
         credentials:true
     }
 ))
