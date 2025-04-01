@@ -20,7 +20,7 @@ app.use(express.json())
 
 app.use(cors(
     {
-        origin:'http://localhost:5173',
+        origin:'https://post-blog-backend.onrender.com',
         credentials:true
     }
 ))
