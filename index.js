@@ -20,7 +20,7 @@ app.use(express.json())
 
 app.use(cors(
     {
-        origin:'https://post-blog-backend.onrender.com',
+        origin:'https://post-blog-frontend.vercel.app',
         credentials:true
     }
 ))
